@@ -18,6 +18,10 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
 db = SQLAlchemy(model_class=Base)
 db.init_app(app)
 
+class User(UserMixin):
+    def __init__(self, id, email):
+        self.id = id
+        self.email = email
 
 # Flask Login manager for restricting /secrets page
 # only logged in users can access
@@ -27,6 +31,7 @@ login_manager.init_app(app)
 # returns the corresponding user object
 @login_manager.user_loader
 def load_user(user_id):
+
     return User.get(user_id)
 
 
@@ -41,6 +46,7 @@ class User(db.Model):
 
 with app.app_context():
     db.create_all()
+
 
 
 @app.route('/')
@@ -59,8 +65,8 @@ def register():
         )
         db.session.add(new_user)
         db.session.commit()
-        flash("You've registered successfully!", "success")
-        login_user(new_user)
+        flash("You've registered successfully!", "info")
+        login_user(new_user, remember=True, duration="permanent")
         return redirect(url_for('secrets', name=new_user.name))
     return render_template("register.html")
 
@@ -72,7 +78,8 @@ def login():
         user_password = request.form.get('password')
         user_data = db.session.execute(db.select(User).where(User.email == user_email)).scalar()
         if check_password_hash(user_data.password, user_password):
-            flash("Password matched.", "success")
+            login_user(user_data, remember=True, duration="permanent")
+            flash("Password matched.", "info")
             print(user_data.name)
             return redirect(url_for('secrets', name=user_data.name))
         flash("Invalid email/password", "error")
@@ -80,7 +87,8 @@ def login():
     return render_template("login.html")
 
 
-@app.route('/secrets')
+@app.route('/secrets', methods=['GET'])
+@login_required
 def secrets():
     name = request.args.get('name')
     return render_template("secrets.html", name=name)
@@ -89,10 +97,12 @@ def secrets():
 @app.route('/logout')
 def logout():
     logout_user()
+    flash("Logout successfully", "info")
     return redirect(url_for('home'))
 
 
 @app.route('/download', methods=['GET'])
+@login_required
 def download():
     return send_from_directory(
         'static/files',
