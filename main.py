@@ -14,10 +14,21 @@ app.config['SECRET_KEY'] = 'secret-key-goes-here'
 class Base(DeclarativeBase):
     pass
 
-
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
 db = SQLAlchemy(model_class=Base)
 db.init_app(app)
+
+
+# Flask Login manager for restricting /secrets page
+# only logged in users can access
+login_manager = LoginManager()
+login_manager.init_app(app)
+# this should take 'str' ID of a user
+# returns the corresponding user object
+@login_manager.user_loader
+def load_user(user_id):
+    return User.get(user_id)
+
 
 # CREATE TABLE IN DB
 
@@ -48,12 +59,23 @@ def register():
         )
         db.session.add(new_user)
         db.session.commit()
+        flash("You've registered successfully!", "success")
         return redirect(url_for('secrets', name=new_user.name))
     return render_template("register.html")
 
 
-@app.route('/login')
+@app.route('/login', methods=['GET','POST'])
 def login():
+    if request.method == 'POST':
+        user_email = request.form.get('email')
+        user_password = request.form.get('password')
+        user_data = db.session.execute(db.select(User).where(User.email == user_email)).scalar()
+        if check_password_hash(user_data.password, user_password):
+            flash("Password matched.", "success")
+            print(user_data.name)
+            return redirect(url_for('secrets', name=user_data.name))
+        flash("Invalid email/password", "error")
+        return redirect(url_for('login'))
     return render_template("login.html")
 
 
