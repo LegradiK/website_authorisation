@@ -60,6 +60,7 @@ def register():
         db.session.add(new_user)
         db.session.commit()
         flash("You've registered successfully!", "success")
+        login_user(new_user)
         return redirect(url_for('secrets', name=new_user.name))
     return render_template("register.html")
 
@@ -87,7 +88,8 @@ def secrets():
 
 @app.route('/logout')
 def logout():
-    pass
+    logout_user()
+    return redirect(url_for('home'))
 
 
 @app.route('/download', methods=['GET'])
