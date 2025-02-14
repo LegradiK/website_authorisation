@@ -18,11 +18,6 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///users.db'
 db = SQLAlchemy(model_class=Base)
 db.init_app(app)
 
-class User(UserMixin):
-    def __init__(self, id, email):
-        self.id = id
-        self.email = email
-
 # Flask Login manager for restricting /secrets page
 # only logged in users can access
 login_manager = LoginManager()
@@ -31,14 +26,11 @@ login_manager.init_app(app)
 # returns the corresponding user object
 @login_manager.user_loader
 def load_user(user_id):
-
-    return User.get(user_id)
+    return User.query.get(user_id)
 
 
 # CREATE TABLE IN DB
-
-
-class User(db.Model):
+class User(db.Model, UserMixin):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     email: Mapped[str] = mapped_column(String(100), unique=True)
     password: Mapped[str] = mapped_column(String(100))
@@ -46,7 +38,6 @@ class User(db.Model):
 
 with app.app_context():
     db.create_all()
-
 
 
 @app.route('/')
@@ -57,16 +48,20 @@ def home():
 @app.route('/register', methods=['GET','POST'])
 def register():
     if request.method == 'POST':
+        email = request.form.get('email')
+        if db.session.query(User).filter(User.email == email).first():
+            flash("This email is already registered. Please login instead.", "error")
+            return redirect(url_for('login'))
         password = request.form.get('password')
         new_user = User(
             name = request.form.get('name'),
-            email = request.form.get('email'),
+            email = email,
             password = generate_password_hash(password, method='pbkdf2:sha256', salt_length=8),
         )
         db.session.add(new_user)
         db.session.commit()
         flash("You've registered successfully!", "info")
-        login_user(new_user, remember=True, duration="permanent")
+        login_user(new_user, remember=True)
         return redirect(url_for('secrets', name=new_user.name))
     return render_template("register.html")
 
@@ -77,12 +72,15 @@ def login():
         user_email = request.form.get('email')
         user_password = request.form.get('password')
         user_data = db.session.execute(db.select(User).where(User.email == user_email)).scalar()
+        if user_data == None:
+            flash("This email doesn't exist in the database", "error")
+            return redirect(url_for('login'))
         if check_password_hash(user_data.password, user_password):
-            login_user(user_data, remember=True, duration="permanent")
+            login_user(user_data, remember=True)
             flash("Password matched.", "info")
             print(user_data.name)
             return redirect(url_for('secrets', name=user_data.name))
-        flash("Invalid email/password", "error")
+        flash("Invalid password. Please try again", "error")
         return redirect(url_for('login'))
     return render_template("login.html")
 
@@ -93,14 +91,6 @@ def secrets():
     name = request.args.get('name')
     return render_template("secrets.html", name=name)
 
-
-@app.route('/logout')
-def logout():
-    logout_user()
-    flash("Logout successfully", "info")
-    return redirect(url_for('home'))
-
-
 @app.route('/download', methods=['GET'])
 @login_required
 def download():
@@ -109,6 +99,13 @@ def download():
         'cheat_sheet.pdf',
         as_attachment = False
     )
+
+@app.route('/logout')
+def logout():
+    logout_user()
+    flash("Logout successfully", "info")
+    return redirect(url_for('home'))
+
 
 
 if __name__ == "__main__":
