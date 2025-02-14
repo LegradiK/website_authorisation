@@ -42,6 +42,8 @@ with app.app_context():
 
 @app.route('/')
 def home():
+    if current_user.is_authenticated:
+        return render_template("index.html", logged_in=True)
     return render_template("index.html")
 
 
@@ -88,17 +90,21 @@ def login():
 @app.route('/secrets', methods=['GET'])
 @login_required
 def secrets():
-    name = request.args.get('name')
-    return render_template("secrets.html", name=name)
+    if current_user.is_authenticated:
+        name = request.args.get('name')
+        return render_template("secrets.html", name=name, logged_in=True)
+    return redirect(url_for('login'))
 
 @app.route('/download', methods=['GET'])
 @login_required
 def download():
-    return send_from_directory(
-        'static/files',
-        'cheat_sheet.pdf',
-        as_attachment = False
-    )
+    if current_user.is_authenticated:
+        return send_from_directory(
+            'static/files',
+            'cheat_sheet.pdf',
+            as_attachment = False,
+        )
+    return redirect(url_for('login'))
 
 @app.route('/logout')
 def logout():
